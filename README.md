@@ -1,8 +1,23 @@
 # Blitz Swarm
 
-Blitz Swarm is a CLI-first research synthesis runtime that coordinates a small
-parallel agent swarm over a Redis-backed blackboard with durable SQLite state
-and semantic memory.
+Blitz Swarm is an experimental, CLI-first multi-agent runtime for research
+synthesis. It runs a small specialist swarm over a Redis blackboard, persists
+durable state in SQLite WAL, stores semantic memory in LanceDB, and emits both
+human-readable reports and machine-readable traces for every run.
+
+## What it does
+
+- Coordinates a six-agent research workflow: planner, local corpus analyst, URL analyst, synthesizer, critic, and arbiter/finalizer.
+- Uses append-only event and observation streams for most writes, with optimistic concurrency for shared plan updates.
+- Seeds the runtime with the included research artifact and supports additional local files plus explicit URL ingestion.
+- Produces `report.md` and `trace.json` artifacts under `.blitz/runs/<run_id>/`.
+
+## Architecture
+
+- Redis: blackboard state, streams, pub/sub notifications, optimistic plan mutation, and hot-memory caching.
+- SQLite + WAL: durable run metadata, event history, source records, memory metadata, dependency edges, and snapshot history.
+- LanceDB: semantic retrieval for source chunks and derived observations, with a JSON fallback path for local development.
+- Retention layer: composite utility scoring, dependency-aware eviction checks, and cold-storage demotion instead of destructive deletion.
 
 ## Quick start
 
@@ -15,12 +30,33 @@ blitz ingest compass_artifact_wf-f6ac8f4e-2c3f-47d2-8611-8dc2eb1032cc_text_markd
 blitz run research --brief "Summarize the optimal memory architecture for an agent swarm."
 ```
 
+## CLI
+
+```bash
+blitz ingest <paths...> [--url <url> ...]
+blitz run research --brief "<prompt>" [--input <path> ...] [--url <url> ...]
+blitz inspect run <run_id>
+```
+
 ## Environment
 
 - `BLITZ_REDIS_URL` defaults to `redis://127.0.0.1:6379/0`
+- `BLITZ_STATE_DIR` overrides the local SQLite and vector-store state root
+- `BLITZ_RUN_DIR` overrides where `report.md` and `trace.json` are written
 - `OPENAI_API_BASE` points to an OpenAI-compatible API
 - `OPENAI_API_KEY` provides the API credential
 - `OPENAI_CHAT_MODEL` defaults to `gpt-4.1-mini`
 - `OPENAI_EMBEDDING_MODEL` defaults to `text-embedding-3-small`
 
-Run artifacts are written to `.blitz/runs/<run_id>/`.
+If OpenAI-compatible credentials are not configured, Blitz Swarm falls back to
+deterministic mock providers so the runtime and tests still execute locally.
+
+## Testing
+
+```bash
+PYTHONPATH=src python3 -m unittest discover -s tests -v
+```
+
+The integration suite expects a local Redis server and the `redis` Python
+package to be installed. The OpenAI smoke test only runs when credentials are
+present.
