@@ -26,11 +26,8 @@ from blitz_swarm.models import (
     RunConfig,
 )
 from blitz_swarm.memory import MemoryCoordinator
+from blitz_swarm.providers.local_cli import LocalCliLLMClient
 from blitz_swarm.providers.mock import HashEmbeddingClient, RuleBasedLLMClient
-from blitz_swarm.providers.openai_compatible import (
-    OpenAICompatibleEmbeddingClient,
-    OpenAICompatibleLLMClient,
-)
 from blitz_swarm.retention import RetentionManager
 from blitz_swarm.storage import SQLiteDurableStore
 from blitz_swarm.utils import random_id
@@ -294,20 +291,17 @@ class SwarmRuntime:
     def from_env(cls) -> "SwarmRuntime":
         settings = AppSettings.from_env()
         settings.ensure_directories()
-        if settings.openai_api_base and settings.openai_api_key:
-            llm_client = OpenAICompatibleLLMClient(
-                base_url=settings.openai_api_base,
-                api_key=settings.openai_api_key,
-                model=settings.openai_chat_model,
-            )
-            embedding_client = OpenAICompatibleEmbeddingClient(
-                base_url=settings.openai_api_base,
-                api_key=settings.openai_api_key,
-                model=settings.openai_embedding_model,
+        # Embeddings have no local-CLI equivalent, so the deterministic hash
+        # embedder is always used regardless of LLM backend (see
+        # providers/local_cli.py docstring).
+        embedding_client = HashEmbeddingClient()
+        if settings.llm_backend == "cli":
+            llm_client = LocalCliLLMClient(
+                model=settings.llm_cli_model,
+                command=settings.llm_cli_command,
             )
         else:
             llm_client = RuleBasedLLMClient()
-            embedding_client = HashEmbeddingClient()
         return cls(settings=settings, llm_client=llm_client, embedding_client=embedding_client)
 
     async def __aenter__(self) -> "SwarmRuntime":

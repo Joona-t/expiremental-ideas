@@ -26,10 +26,12 @@ class AppSettings(BaseModel):
     redis_url: str = "redis://127.0.0.1:6379/0"
     sqlite_path: Path = Field(default_factory=lambda: _workspace_root() / ".blitz" / "state" / "blitz_swarm.db")
     vector_dir: Path = Field(default_factory=lambda: _workspace_root() / ".blitz" / "state" / "lancedb")
-    openai_api_base: str | None = None
-    openai_api_key: str | None = None
-    openai_chat_model: str = "gpt-4.1-mini"
-    openai_embedding_model: str = "text-embedding-3-small"
+    # LLM backend: "mock" (default, deterministic, fully offline) or "cli"
+    # (shells out to the user's own claude/codex CLI subscription — never a
+    # paid token API; see providers/local_cli.py and BUG-001).
+    llm_backend: str = "mock"
+    llm_cli_command: str = "claude"
+    llm_cli_model: str = "sonnet"
     default_max_rounds: int = 4
     retention_hot_limit: int = 250
     snapshot_interval: int = 2
@@ -47,10 +49,9 @@ class AppSettings(BaseModel):
             redis_url=os.getenv("BLITZ_REDIS_URL", "redis://127.0.0.1:6379/0"),
             sqlite_path=Path(os.getenv("BLITZ_SQLITE_PATH", state_dir / "blitz_swarm.db")),
             vector_dir=Path(os.getenv("BLITZ_VECTOR_DIR", state_dir / "lancedb")),
-            openai_api_base=os.getenv("OPENAI_API_BASE"),
-            openai_api_key=os.getenv("OPENAI_API_KEY"),
-            openai_chat_model=os.getenv("OPENAI_CHAT_MODEL", "gpt-4.1-mini"),
-            openai_embedding_model=os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small"),
+            llm_backend=os.getenv("BLITZ_LLM_BACKEND", "mock"),
+            llm_cli_command=os.getenv("BLITZ_LLM_CLI_COMMAND", "claude"),
+            llm_cli_model=os.getenv("BLITZ_LLM_CLI_MODEL", "sonnet"),
             default_max_rounds=int(os.getenv("BLITZ_MAX_ROUNDS", "4")),
             retention_hot_limit=int(os.getenv("BLITZ_RETENTION_HOT_LIMIT", "250")),
             snapshot_interval=int(os.getenv("BLITZ_SNAPSHOT_INTERVAL", "2")),

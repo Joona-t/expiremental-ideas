@@ -43,13 +43,23 @@ blitz inspect run <run_id>
 - `BLITZ_REDIS_URL` defaults to `redis://127.0.0.1:6379/0`
 - `BLITZ_STATE_DIR` overrides the local SQLite and vector-store state root
 - `BLITZ_RUN_DIR` overrides where `report.md` and `trace.json` are written
-- `OPENAI_API_BASE` points to an OpenAI-compatible API
-- `OPENAI_API_KEY` provides the API credential
-- `OPENAI_CHAT_MODEL` defaults to `gpt-4.1-mini`
-- `OPENAI_EMBEDDING_MODEL` defaults to `text-embedding-3-small`
+- `BLITZ_LLM_BACKEND` selects the chat-completion backend: `mock` (default,
+  deterministic, fully offline) or `cli` (shells out to your own `claude`/
+  `codex` CLI subscription — see below)
+- `BLITZ_LLM_CLI_COMMAND` selects which CLI to invoke when
+  `BLITZ_LLM_BACKEND=cli`: `claude` (default) or `codex`
+- `BLITZ_LLM_CLI_MODEL` selects the model alias passed to the CLI (default
+  `sonnet`)
 
-If OpenAI-compatible credentials are not configured, Blitz Swarm falls back to
-deterministic mock providers so the runtime and tests still execute locally.
+Blitz Swarm never talks to a paid token API. By default it uses the
+deterministic mock LLM/embedding providers so the runtime and tests run fully
+offline with no credentials of any kind. Setting `BLITZ_LLM_BACKEND=cli`
+routes chat completions through your locally installed and logged-in
+`claude -p` (or `codex exec`) subprocess — the same CLI subscription you use
+interactively, never an `ANTHROPIC_API_KEY`/`OPENAI_API_KEY` HTTP call.
+Embeddings always use the local deterministic hash embedder
+(`providers/mock.py::HashEmbeddingClient`), since no CLI exposes a raw
+embedding endpoint.
 
 ## Testing
 
@@ -58,5 +68,4 @@ PYTHONPATH=src python3 -m unittest discover -s tests -v
 ```
 
 The integration suite expects a local Redis server and the `redis` Python
-package to be installed. The OpenAI smoke test only runs when credentials are
-present.
+package to be installed.
