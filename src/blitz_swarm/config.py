@@ -31,7 +31,8 @@ class AppSettings(BaseModel):
     # paid token API; see providers/local_cli.py and BUG-001).
     llm_backend: str = "mock"
     llm_cli_command: str = "claude"
-    llm_cli_model: str = "sonnet"
+    # None = per-CLI default (claude -> sonnet, codex -> its own config); BUG-002.
+    llm_cli_model: str | None = None
     default_max_rounds: int = 4
     retention_hot_limit: int = 250
     snapshot_interval: int = 2
@@ -49,9 +50,9 @@ class AppSettings(BaseModel):
             redis_url=os.getenv("BLITZ_REDIS_URL", "redis://127.0.0.1:6379/0"),
             sqlite_path=Path(os.getenv("BLITZ_SQLITE_PATH", state_dir / "blitz_swarm.db")),
             vector_dir=Path(os.getenv("BLITZ_VECTOR_DIR", state_dir / "lancedb")),
-            llm_backend=os.getenv("BLITZ_LLM_BACKEND", "mock"),
-            llm_cli_command=os.getenv("BLITZ_LLM_CLI_COMMAND", "claude"),
-            llm_cli_model=os.getenv("BLITZ_LLM_CLI_MODEL", "sonnet"),
+            llm_backend=os.getenv("BLITZ_LLM_BACKEND", "mock").strip().lower(),
+            llm_cli_command=os.getenv("BLITZ_LLM_CLI_COMMAND", "claude").strip().lower(),
+            llm_cli_model=os.getenv("BLITZ_LLM_CLI_MODEL") or None,
             default_max_rounds=int(os.getenv("BLITZ_MAX_ROUNDS", "4")),
             retention_hot_limit=int(os.getenv("BLITZ_RETENTION_HOT_LIMIT", "250")),
             snapshot_interval=int(os.getenv("BLITZ_SNAPSHOT_INTERVAL", "2")),

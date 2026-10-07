@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import warnings
 from pathlib import Path
 from typing import Any
 
@@ -301,6 +302,13 @@ class SwarmRuntime:
                 command=settings.llm_cli_command,
             )
         else:
+            if settings.llm_backend != "mock":
+                warnings.warn(
+                    f"Unknown BLITZ_LLM_BACKEND={settings.llm_backend!r}; falling back to the "
+                    "deterministic mock LLM. Valid values: 'mock', 'cli'.",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
             llm_client = RuleBasedLLMClient()
         return cls(settings=settings, llm_client=llm_client, embedding_client=embedding_client)
 

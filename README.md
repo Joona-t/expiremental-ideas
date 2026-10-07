@@ -48,8 +48,9 @@ blitz inspect run <run_id>
   `codex` CLI subscription — see below)
 - `BLITZ_LLM_CLI_COMMAND` selects which CLI to invoke when
   `BLITZ_LLM_BACKEND=cli`: `claude` (default) or `codex`
-- `BLITZ_LLM_CLI_MODEL` selects the model alias passed to the CLI (default
-  `sonnet`)
+- `BLITZ_LLM_CLI_MODEL` selects the model passed to the CLI. Unset means a
+  per-CLI default: `sonnet` for `claude`, and no `--model` flag for `codex`
+  (it uses the model in `~/.codex/config.toml`)
 
 Blitz Swarm never talks to a paid token API. By default it uses the
 deterministic mock LLM/embedding providers so the runtime and tests run fully

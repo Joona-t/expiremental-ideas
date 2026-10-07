@@ -11,7 +11,7 @@
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
-PATTERN='anthropic\.Anthropic\(|api\.anthropic\.com|ANTHROPIC_API_KEY|OPENAI_API_KEY'
+PATTERN='anthropic\.Anthropic\(|from anthropic import|import anthropic|api\.anthropic\.com|ANTHROPIC_API_KEY|from openai import|import openai|openai\.OpenAI\(|api\.openai\.com|OPENAI_API_KEY|OPENAI_API_BASE'
 
 # Scan tracked files only, so vendored/untracked third-party code never
 # trips this. Exclude this guard script itself and the local-CLI provider,

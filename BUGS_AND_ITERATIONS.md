@@ -52,3 +52,42 @@ paid API never).
 **Verification:** `PYTHONPATH=src python3 -m unittest discover -s tests -v`
 → 20 tests, 19 passed, 1 skipped (Redis not running locally — pre-existing,
 environment-only, not caused by this change).
+
+## BUG-002 — Advertised `codex` CLI backend was broken; BUG-001 had no regression test
+
+**Date:** 2026-10-07
+
+**Problem:** `BLITZ_LLM_BACKEND=cli BLITZ_LLM_CLI_COMMAND=codex` (documented
+in README) did not work. (a) `BLITZ_LLM_CLI_MODEL` defaulted to `sonnet` for
+both CLIs, so codex was invoked as `codex exec --model sonnet --json`, and
+`sonnet` is not a codex model. (b) `codex exec --json` prints JSONL events.
+`json.loads` on the multi-line stream raised, and the fallback returned the
+whole raw event stream (`{"type": "thread.started", ...}`) as the "answer".
+Also: (c) no unittest failed if the BUG-001 paid-client auto-activation was
+restored. (d) The guard script let `from openai import OpenAI`,
+`api.openai.com` and `OPENAI_API_BASE` through. (e) An unknown
+`BLITZ_LLM_BACKEND` (for example `CLI`) silently fell back to mock.
+
+**Root cause:** the codex path was written by analogy to `claude -p
+--output-format json` (one JSON envelope) and was never exercised against
+real `codex exec --json` output.
+
+**Fix:**
+- `LocalCliLLMClient(model=None)` uses a per-CLI default: `sonnet` for
+  claude, and no `--model` flag for codex (it uses `~/.codex/config.toml`).
+  `AppSettings.llm_cli_model` now defaults to `None`.
+- codex is called as `codex exec --json --skip-git-repo-check [--model M] -`
+  (prompt on stdin). Its JSONL is parsed for the last `item.completed`
+  `agent_message`. `error`/`turn.failed` events, or no agent message at all,
+  raise `LocalCliLLMError`.
+- `BLITZ_LLM_BACKEND` / `BLITZ_LLM_CLI_COMMAND` are trimmed and lowercased.
+  An unknown backend emits a `RuntimeWarning` before it falls back to mock.
+- The guard pattern now also catches openai/anthropic SDK imports,
+  `openai.OpenAI(`, `api.openai.com` and `OPENAI_API_BASE`.
+- New tests in `tests/test_local_cli_provider.py`: `CodexBackendTests` (6)
+  and `Bug001RegressionTests` (4). With main's `runtime.py`, `config.py` and
+  `openai_compatible.py` restored, 4 of these fail and 1 errors.
+
+**Verification:** `PYTHONPATH=src python -m unittest discover -s tests`
+gives 30 tests, OK (skipped=1, Redis integration). `scripts/check-no-paid-api.sh`
+prints clean. A tracked file containing `from openai import OpenAI` now exits 1.

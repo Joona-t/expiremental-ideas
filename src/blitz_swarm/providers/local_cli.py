@@ -49,11 +49,18 @@ class LocalCliLLMClient:
     `BLITZ_LLM_CLI_COMMAND=codex` to use the Codex CLI instead (`codex exec`).
     Either way, no API key ever leaves this process — the CLI authenticates
     via the user's own logged-in subscription.
+
+    `model` is optional and per-CLI: when unset, `claude` gets `sonnet` and
+    `codex` gets no `--model` flag at all (so it uses the model configured in
+    `~/.codex/config.toml`). A Claude alias like `sonnet` is never sent to
+    codex by default (BUG-002).
     """
 
-    def __init__(self, *, model: str, command: str = "claude", timeout: int = 300) -> None:
-        self.model = model
+    DEFAULT_MODELS = {"claude": "sonnet", "codex": None}
+
+    def __init__(self, *, model: str | None = None, command: str = "claude", timeout: int = 300) -> None:
         self.command = command
+        self.model = model if model else self.DEFAULT_MODELS.get(command)
         self.timeout = timeout
 
     async def complete(self, system_prompt: str, user_prompt: str, *, temperature: float = 0.2) -> str:
@@ -66,9 +73,15 @@ class LocalCliLLMClient:
     def _run_sync(self, prompt: str) -> str:
         env = build_cli_env()
         if self.command == "codex":
-            cmd = ["codex", "exec", "--model", self.model, "--json"]
+            # `-` = read the prompt from stdin; --json emits JSONL events.
+            cmd = ["codex", "exec", "--json", "--skip-git-repo-check"]
+            if self.model:
+                cmd += ["--model", self.model]
+            cmd.append("-")
         else:
-            cmd = ["claude", "-p", "--model", self.model, "--output-format", "json", "--max-turns", "1"]
+            cmd = ["claude", "-p", "--output-format", "json", "--max-turns", "1"]
+            if self.model:
+                cmd += ["--model", self.model]
 
         try:
             result = subprocess.run(
@@ -94,6 +107,9 @@ class LocalCliLLMClient:
         if not stdout:
             raise LocalCliLLMError(f"{self.command} CLI returned empty stdout. stderr: {stderr or '(none)'}")
 
+        if self.command == "codex":
+            return self._parse_codex_jsonl(stdout)
+
         try:
             cli_output = json.loads(stdout)
         except json.JSONDecodeError:
@@ -105,3 +121,33 @@ class LocalCliLLMClient:
         if isinstance(cli_output, dict):
             return str(cli_output.get("result", stdout))
         return stdout
+
+    def _parse_codex_jsonl(self, stdout: str) -> str:
+        """Return the last `agent_message` text from `codex exec --json` output.
+
+        codex emits one JSON event per line (thread.started, turn.started,
+        item.completed, turn.completed, ...). Feeding the whole stream to
+        `json.loads` fails and used to leak the raw event stream back as the
+        "answer" (BUG-002).
+        """
+        last_message: str | None = None
+        for line in stdout.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(event, dict):
+                continue
+            etype = event.get("type")
+            if etype in ("error", "turn.failed"):
+                detail = event.get("message") or event.get("error") or event
+                raise LocalCliLLMError(f"codex CLI error: {detail}")
+            item = event.get("item")
+            if etype == "item.completed" and isinstance(item, dict) and item.get("type") == "agent_message":
+                last_message = str(item.get("text", ""))
+        if last_message is None:
+            raise LocalCliLLMError(f"codex CLI produced no agent_message event. stdout: {stdout[:500]}")
+        return last_message
